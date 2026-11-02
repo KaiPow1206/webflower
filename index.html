@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thư Viện Hoa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="icon"
+    href="https://res.cloudinary.com/dzjqft1de/image/upload/v1790524519/1790524362351_201207093023905445_4437020066400366844_6c9a817f586bc0c6078b2c49ec716e0a.jpg">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <div class="container header-inner">
+      <a class="brand-lockup" href="/index.html" aria-label="Thư Viện Hoa Của GR BÁO">
+        <span class="brand-mark" aria-hidden="true"><i class="bi bi-flower1"></i></span>
+        <span class="brand-copy">
+          <h1 class="app-title">Thư Viện Hoa Nhà BÁO</h1>
+          <span class="app-subtitle">Tra cứu kho hoa</span>
+        </span>
+      </a>
+      <div class="header-member-control">
+        <button type="button" id="memberMenuTrigger" class="header-member-trigger" aria-haspopup="dialog"
+          aria-expanded="false" aria-controls="memberPanel">
+          <i class="bi bi-list" aria-hidden="true"></i>
+          <span class="header-member-label">Gia Đình Báo</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="memberPanelBackdrop" class="member-panel-backdrop" aria-hidden="true"></div>
+  <aside id="memberPanel" class="member-panel" role="dialog" aria-modal="true"
+    aria-labelledby="memberPanelTitle" aria-hidden="true" inert>
+    <div class="member-panel-header">
+      <div>
+        <h2 id="memberPanelTitle" class="member-panel-title">Gia Đình Báo</h2>
+        <p class="member-panel-description">Tất cả thành viên trong gia đình báo.</p>
+      </div>
+      <button type="button" id="closeMemberPanel" class="member-panel-close" aria-label="Đóng danh sách thành viên">
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="member-panel-list" role="group" aria-label="Danh sách thành viên">
+      <div class="member-menu-options"></div>
+    </div>
+  </aside>
+
+  <main id="top" class="container app-main pb-5">
+    <section class="toolbar" aria-label="Công cụ tra cứu">
+      <div class="lookup-fields">
+        <div class="search-wrap">
+          <i class="bi bi-search search-icon" aria-hidden="true"></i>
+          <input type="search" id="searchInput" class="form-control search-input" placeholder="Tìm kiếm tên hoa..."
+            aria-label="Tìm kiếm tên hoa" autocomplete="off">
+        </div>
+      </div>
+      <div class="filter-group" role="group" aria-label="Lọc theo chất lượng">
+        <button type="button" class="btn filter-btn active" data-filter="all" aria-pressed="true">Tất cả <span
+            class="filter-count">0</span></button>
+        <button type="button" class="btn filter-btn" data-filter="đỏ" aria-pressed="false">Đỏ <span
+            class="filter-count">0</span></button>
+        <button type="button" class="btn filter-btn" data-filter="cam" aria-pressed="false">Cam <span
+            class="filter-count">0</span></button>
+        <button type="button" class="btn filter-btn" data-filter="tím" aria-pressed="false">Tím <span
+            class="filter-count">0</span></button>
+        <button type="button" class="btn filter-btn" data-filter="special" aria-pressed="false">
+          <i class="bi bi-star-fill special-filter-icon" aria-hidden="true"></i>Đặc biệt
+          <span class="filter-count">0</span>
+        </button>
+      </div>
+    </section>
+
+    <div id="statusArea" class="status-area text-center py-5" role="status" aria-live="polite" aria-atomic="true"
+      aria-busy="true">
+      <div class="spinner-border text-light" aria-hidden="true">
+        <span class="visually-hidden">Đang tải...</span>
+      </div>
+      <p class="mt-3 mb-0">Đang tải dữ liệu hoa...</p>
+    </div>
+
+    <section id="flowerGrid" class="d-none" aria-label="Danh sách hoa"></section>
+    <p id="resultsAnnouncement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+  </main>
+
+  <div class="modal fade" id="ownersModal" tabindex="-1" aria-labelledby="ownersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title fs-5" id="ownersModalLabel">Người sở hữu</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+        <div class="modal-body">
+          <div id="modalFlowerInfo" class="modal-flower-info mb-3"></div>
+          <ul id="ownersList" class="list-group list-group-flush"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="celebrationOverlay" class="celebration-overlay" aria-hidden="true">
+    <canvas id="fireworksCanvas" class="fireworks-canvas"></canvas>
+    <section class="celebration-popup" role="status" aria-label="Thông báo">
+      <div class="celebration-rainbow" aria-hidden="true"></div>
+      <div class="celebration-actions">
+        <button type="button" id="closeCelebration" class="celebration-icon-button" aria-label="Tắt thông báo"
+          title="Tắt thông báo">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="celebration-content">
+        <img class="celebration-gif" src="chucmung.gif" alt="Chúc mừng">
+        <p id="celebrationMessage" class="celebration-message"></p>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="celebration-config.js"></script>
+  <script src="main.js"></script>
+</body>
+
+</html>
