@@ -1,4 +1,6 @@
-const API_URL = "http://mykey.nguyennhoanhthai.workers.dev/";
+// const API_URL = "http://mykey.nguyennhoanhthai.workers.dev/";
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbzaPXdjjGFrv4Kpe2CpQxYG6cZziX2G8MbVXAQj6koo3O_JHjRfEhxiap7-KK49kWbjrQ/exec";
 
 const RENDER_BATCH_SIZE = 20;
 const PAGE_SIZE = 48;
