@@ -94,7 +94,7 @@
       '<div class="curiosity-guard-card">' +
       '<div class="curiosity-guard-emoji" aria-hidden="true">👀</div>' +
       '<h2 class="curiosity-guard-title" id="curiosityGuardTitle">Bạn đừng tò mò nhé</h2>' +
-      '<p class="curiosity-guard-text" id="curiosityGuardText">Ở đây chỉ có hoa thôi. Đóng DevTools rồi xem tiếp nhé 😅</p>' +
+      '<p class="curiosity-guard-text" id="curiosityGuardText">Ở đây chỉ có hoa thôi. Đừng tò mò gì nữa nhé 😅</p>' +
       '<button type="button" class="curiosity-guard-button">Mình hứa không tò mò nữa</button>' +
       "</div>";
 
