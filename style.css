@@ -39,6 +39,8 @@
   --quality-orange-surface: #2a1c12;
   --quality-purple-border: #a986d0;
   --quality-purple-surface: #21172d;
+  --quality-blue-border: #88a9dd;
+  --quality-blue-surface: #21172d;
   --quality-special-border: #b99a65;
   --quality-special-surface: #241e14;
   --quality-special-text: #f1dfbd;
@@ -51,6 +53,8 @@
   /* taste-skill-ignore: Tím is a meaningful source-data category, so keep its unique quality cue. */
   --purple-start: #d7b4ff;
   --purple-end: #291a37;
+  --blue-start: #b4e5ff;
+  --blue-end: #211a37;
   --neutral-start: #ffffff;
   --neutral-end: #222222;
 }
@@ -452,6 +456,10 @@ body.member-panel-open {
   color: var(--text-main);
 }
 
+.filter-btn[hidden] {
+  display: none !important;
+}
+
 .filter-btn[data-filter="đỏ"].active {
   border-color: var(--quality-red-border);
   background: var(--quality-red-surface);
@@ -465,6 +473,11 @@ body.member-panel-open {
 .filter-btn[data-filter="tím"].active {
   border-color: var(--quality-purple-border);
   background: var(--quality-purple-surface);
+}
+
+.filter-btn[data-filter="xanh"].active {
+  border-color: var(--quality-blue-border);
+  background: var(--quality-blue-surface);
 }
 
 .filter-btn[data-filter="special"] .special-filter-icon {
@@ -767,6 +780,11 @@ body.member-panel-open {
 .quality-badge.tim {
   background: var(--purple-end);
   color: var(--purple-start);
+}
+
+.quality-badge.xanh {
+  background: var(--blue-end);
+  color: var(--blue-start);
 }
 
 .quality-badge.none {

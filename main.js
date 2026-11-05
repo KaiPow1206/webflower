@@ -1,5 +1,5 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwzzo76keSo_RCYBjMoMNQaGEB0ul78ZBLP2Bvqd9DH695IxkwOh8-JrQbj8qWe5VaaBg/exec";
+  "https://script.google.com/macros/s/AKfycbzaPXdjjGFrv4Kpe2CpQxYG6cZziX2G8MbVXAQj6koo3O_JHjRfEhxiap7-KK49kWbjrQ/exec";
 
 const RENDER_BATCH_SIZE = 20;
 const PAGE_SIZE = 48;
@@ -218,6 +218,7 @@ function qualityClass(quality) {
   if (normalized === "đỏ") return "quality-do";
   if (normalized === "cam") return "quality-cam";
   if (normalized === "tím") return "quality-tim";
+  if (normalized === "xanh") return "quality-xanh";
   return "quality-none";
 }
 
@@ -226,6 +227,7 @@ function qualityBadgeClass(quality) {
   if (normalized === "đỏ") return "do";
   if (normalized === "cam") return "cam";
   if (normalized === "tím") return "tim";
+  if (normalized === "xanh") return "xanh"
   return "none";
 }
 
@@ -234,6 +236,7 @@ function qualityLabel(quality) {
   if (normalized === "đỏ") return "Đỏ";
   if (normalized === "cam") return "Cam";
   if (normalized === "tím") return "Tím";
+  if (normalized === "xanh") return "Xanh";
   return "Chưa phân loại";
 }
 
@@ -412,8 +415,9 @@ function updateQualityCounts() {
   const counts = {
     all: 0,
     "đỏ": 0,
-    cam: 0,
+    "cam": 0,
     "tím": 0,
+    "xanh":0,
     special: 0,
   };
 
@@ -436,6 +440,22 @@ function updateQualityCounts() {
     const countEl = button.querySelector(".filter-count");
     if (countEl) countEl.textContent = counts[button.dataset.filter] || 0;
   });
+
+  const xanhButton = document.querySelector('.filter-btn[data-filter="xanh"]');
+  if (xanhButton) {
+    const hasXanh = counts.xanh > 0;
+    xanhButton.hidden = !hasXanh;
+    xanhButton.setAttribute("aria-hidden", String(!hasXanh));
+
+    if (!hasXanh && state.activeFilter === "xanh") {
+      state.activeFilter = "all";
+      filterButtons.forEach((button) => {
+        const isActive = button.dataset.filter === "all";
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-pressed", String(isActive));
+      });
+    }
+  }
 }
 
 function updateFilteredFlowers() {
