@@ -96,6 +96,9 @@ select:focus-visible {
 .app-header {
   background: var(--bg-dark);
   border-bottom: 1px solid var(--border-subtle);
+  top: 0;
+  z-index: 100;
+  position: sticky;
 }
 
 .header-inner,
