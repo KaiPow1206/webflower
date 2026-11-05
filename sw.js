@@ -1,5 +1,5 @@
-const CACHE_NAME = "flower-library-v8";
-const STATIC_ASSETS = ["./", "./index.html", "./style.css", "./main.js"];
+const CACHE_NAME = "flower-library-v10";
+const STATIC_ASSETS = ["./", "./index.html", "./style.css", "./main.js", "./devtools-guard.js"];
 
 const API_HOST = "script.google.com";
 const IMAGE_HOSTS = ["drive.google.com", "lh3.googleusercontent.com"];

@@ -1,11 +1,11 @@
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbzaPXdjjGFrv4Kpe2CpQxYG6cZziX2G8MbVXAQj6koo3O_JHjRfEhxiap7-KK49kWbjrQ/exec";
+const API_URL = "http://mykey.nguyennhoanhthai.workers.dev/";
 
 const RENDER_BATCH_SIZE = 20;
 const PAGE_SIZE = 48;
 const SEARCH_DEBOUNCE_MS = 200;
 const IMAGE_ROOT_MARGIN = "300px";
 const CACHE_STORAGE_KEY = "flower_library_cache_v2";
+const GUARD_BLOCKED_MESSAGE = "__curiosity_guard_blocked__";
 const reducedMotionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const state = {
@@ -19,6 +19,7 @@ const state = {
 
 let renderToken = 0;
 let searchDebounceTimer = null;
+let guardReleaseHooked = false;
 
 const flowerGrid = document.getElementById("flowerGrid");
 const statusArea = document.getElementById("statusArea");
@@ -826,16 +827,22 @@ function applyFlowers(flowers) {
 async function fetchFlowersFromApi() {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+  const abortOnGuard = () => controller.abort();
+  window.addEventListener("curiosityguard:block", abortOnGuard, { once: true });
   let response;
   try {
     response = await fetch(API_URL, { signal: controller.signal });
   } catch (error) {
+    if (window.__curiosityGuardActive) {
+      throw new Error(GUARD_BLOCKED_MESSAGE);
+    }
     if (error.name === "AbortError") {
       throw new Error("Kết nối mất quá nhiều thời gian. Kiểm tra mạng rồi thử lại.");
     }
     throw new Error("Không thể kết nối tới máy chủ. Kiểm tra mạng rồi thử lại.");
   } finally {
     window.clearTimeout(timeoutId);
+    window.removeEventListener("curiosityguard:block", abortOnGuard);
   }
 
   if (!response.ok) {
@@ -878,7 +885,27 @@ async function refreshFlowersInBackground(cachedSnapshot) {
   }
 }
 
+function waitForGuardRelease() {
+  if (guardReleaseHooked) return;
+
+  guardReleaseHooked = true;
+  window.addEventListener(
+    "curiosityguard:release",
+    () => {
+      guardReleaseHooked = false;
+      loadData();
+    },
+    { once: true }
+  );
+}
+
 async function loadData() {
+  // DevTools đang mở: không gọi API, chờ đóng DevTools rồi mới tải.
+  if (window.__curiosityGuardActive) {
+    waitForGuardRelease();
+    return;
+  }
+
   const cached = readCachedFlowers();
 
   if (cached) {
@@ -894,6 +921,10 @@ async function loadData() {
     writeCachedFlowers(flowers);
     applyFlowers(flowers);
   } catch (error) {
+    if (error && error.message === GUARD_BLOCKED_MESSAGE) {
+      waitForGuardRelease();
+      return;
+    }
     showError(error.message || "Đã xảy ra lỗi khi tải dữ liệu.");
   }
 }

@@ -1277,6 +1277,93 @@ body.member-panel-open {
   }
 }
 
+.curiosity-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--scrim-dialog);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: opacity 180ms ease, visibility 180ms ease;
+}
+
+.curiosity-guard.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.curiosity-guard-card {
+  width: min(86vw, 400px);
+  padding: 36px 28px 30px;
+  border: 1px solid var(--border-default);
+  border-radius: 20px;
+  background: var(--surface-control);
+  color: var(--text-main);
+  text-align: center;
+  box-shadow: 0 24px 70px var(--shadow-popup); /* taste-skill-ignore: floating dialog. */
+  animation: curiosity-pop 260ms ease-out both;
+}
+
+.curiosity-guard-emoji {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.curiosity-guard-title {
+  margin: 16px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.curiosity-guard-text {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.curiosity-guard-button {
+  min-height: 44px;
+  margin-top: 24px;
+  padding: 0 20px;
+  border: 1px solid var(--border-accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+@media (hover: hover) {
+  .curiosity-guard-button:hover {
+    background: var(--accent-soft);
+  }
+}
+
+.curiosity-guard-button:active {
+  transform: scale(0.97);
+}
+
+@keyframes curiosity-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
