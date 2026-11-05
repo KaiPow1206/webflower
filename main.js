@@ -6,6 +6,11 @@ const SEARCH_DEBOUNCE_MS = 200;
 const IMAGE_ROOT_MARGIN = "300px";
 const CACHE_STORAGE_KEY = "flower_library_cache_v2";
 const GUARD_BLOCKED_MESSAGE = "__curiosity_guard_blocked__";
+const REFRESH_INTERVAL_MS = 60 * 1000;
+const MIN_REFRESH_GAP_MS = 15 * 1000;
+const REFRESH_RETRY_MS = 60 * 1000;
+const SW_UPDATE_CHECK_GAP_MS = 60 * 1000;
+const PAGE_RELOAD_AFTER_MS = 15 * 60 * 1000;
 const reducedMotionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const state = {
@@ -20,6 +25,11 @@ const state = {
 let renderToken = 0;
 let searchDebounceTimer = null;
 let guardReleaseHooked = false;
+let refreshInFlight = null;
+let nextRefreshAt = 0;
+let serviceWorkerRegistration = null;
+let lastServiceWorkerUpdateCheck = 0;
+let hiddenAt = 0;
 
 const flowerGrid = document.getElementById("flowerGrid");
 const statusArea = document.getElementById("statusArea");
@@ -580,8 +590,18 @@ function renderEmptyState() {
   `;
 }
 
-function renderFlowers(reset = true, announceResults = false) {
+function renderFlowers(reset = true, announceResults = false, options = {}) {
+  const preserveView = options.preserveView === true;
+  const previousScrollY = preserveView ? window.scrollY : 0;
+  const previousHeight = preserveView ? flowerGrid.getBoundingClientRect().height : 0;
+  const previousVisibleCount = state.visibleCount;
   const token = ++renderToken;
+
+  const restoreView = () => {
+    if (!preserveView) return;
+    flowerGrid.style.minHeight = "";
+    requestAnimationFrame(() => window.scrollTo(0, previousScrollY));
+  };
 
   updateFilteredFlowers();
 
@@ -593,8 +613,9 @@ function renderFlowers(reset = true, announceResults = false) {
   }
 
   if (reset) {
-    state.visibleCount = PAGE_SIZE;
+    state.visibleCount = preserveView ? Math.max(previousVisibleCount, PAGE_SIZE) : PAGE_SIZE;
     removeLoadMoreSentinel();
+    flowerGrid.style.minHeight = preserveView && previousHeight > 0 ? `${previousHeight}px` : "";
     flowerGrid.innerHTML = "";
   }
 
@@ -602,6 +623,7 @@ function renderFlowers(reset = true, announceResults = false) {
 
   if (filtered.length === 0) {
     renderEmptyState();
+    restoreView();
     return;
   }
 
@@ -612,6 +634,7 @@ function renderFlowers(reset = true, announceResults = false) {
   if (slice.length === 0) {
     updateLoadMoreSentinel(targetCount < filtered.length);
     flowerGrid.classList.remove("d-none");
+    restoreView();
     return;
   }
 
@@ -636,6 +659,7 @@ function renderFlowers(reset = true, announceResults = false) {
 
     updateLoadMoreSentinel(targetCount < filtered.length);
     flowerGrid.classList.remove("d-none");
+    restoreView();
   }
 
   requestAnimationFrame(renderBatch);
@@ -742,10 +766,6 @@ function showLoading() {
   `;
 }
 
-function serializeFlowers(flowers) {
-  return JSON.stringify(flowers);
-}
-
 function flowerDataSignature(flower) {
   return JSON.stringify({
     name: flower.name,
@@ -755,29 +775,22 @@ function flowerDataSignature(flower) {
   });
 }
 
-function prioritizeChangedFlowers(previousFlowers, freshFlowers) {
-  const previousByKey = new Map(
-    previousFlowers.map((flower) => [flowerKey(flower.name), flowerDataSignature(flower)])
-  );
-  const previousIndexByKey = new Map(
-    previousFlowers.map((flower, index) => [flowerKey(flower.name), index])
-  );
-  const changed = [];
-  const unchanged = [];
+function flowerCollectionSignature(flowers) {
+  return flowers
+    .map((flower) => `${flowerKey(flower.name)}\u0000${flowerDataSignature(flower)}`)
+    .sort()
+    .join("\n");
+}
 
-  freshFlowers.forEach((flower) => {
-    const previousSignature = previousByKey.get(flowerKey(flower.name));
-    const target = previousSignature === flowerDataSignature(flower) ? unchanged : changed;
-    target.push(flower);
-  });
+function filterApplicableFlowers(flowers) {
+  return flowers.filter((flower) => (flower.owners || []).length > 0);
+}
 
-  unchanged.sort(
-    (first, second) =>
-      previousIndexByKey.get(flowerKey(first.name)) -
-      previousIndexByKey.get(flowerKey(second.name))
+function collectionsAreEqual(first, second) {
+  return (
+    first.length === second.length &&
+    flowerCollectionSignature(first) === flowerCollectionSignature(second)
   );
-
-  return changed.concat(unchanged);
 }
 
 function readCachedFlowers() {
@@ -814,14 +827,14 @@ function writeCachedFlowers(flowers) {
   }
 }
 
-function applyFlowers(flowers) {
-  state.flowers = flowers.filter((flower) => (flower.owners || []).length > 0);
+function applyFlowers(flowers, { preserveView = false } = {}) {
+  state.flowers = filterApplicableFlowers(flowers);
   populatePlayerFilterOptions(state.flowers);
   updateQualityCounts();
   rebuildFlowerIndex(state.flowers);
   statusArea.classList.add("d-none");
   statusArea.setAttribute("aria-busy", "false");
-  renderFlowers(true);
+  renderFlowers(true, false, { preserveView });
 }
 
 async function fetchFlowersFromApi() {
@@ -831,7 +844,10 @@ async function fetchFlowersFromApi() {
   window.addEventListener("curiosityguard:block", abortOnGuard, { once: true });
   let response;
   try {
-    response = await fetch(API_URL, { signal: controller.signal });
+    response = await fetch(API_URL, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
   } catch (error) {
     if (window.__curiosityGuardActive) {
       throw new Error(GUARD_BLOCKED_MESSAGE);
@@ -868,21 +884,46 @@ async function fetchFlowersFromApi() {
   }
 }
 
-async function refreshFlowersInBackground(cachedSnapshot) {
-  try {
-    const freshFlowers = await fetchFlowersFromApi();
-    const previousFlowers = state.flowers;
-    const cachedData = cachedSnapshot || serializeFlowers(previousFlowers);
-    const orderedFlowers = prioritizeChangedFlowers(previousFlowers, freshFlowers);
-
-    writeCachedFlowers(orderedFlowers);
-
-    if (serializeFlowers(orderedFlowers) !== cachedData) {
-      applyFlowers(orderedFlowers);
-    }
-  } catch {
-    // Giữ dữ liệu cache nếu mạng lỗi.
+function refreshFlowersInBackground(force = false) {
+  if (window.__curiosityGuardActive) {
+    waitForGuardRelease();
+    return Promise.resolve();
   }
+
+  if (refreshInFlight) return refreshInFlight;
+
+  if (navigator.onLine === false) {
+    nextRefreshAt = Date.now() + REFRESH_RETRY_MS;
+    return Promise.resolve();
+  }
+
+  const now = Date.now();
+  if (!force && now < nextRefreshAt) return Promise.resolve();
+
+  nextRefreshAt = now + MIN_REFRESH_GAP_MS;
+
+  refreshInFlight = (async () => {
+    try {
+      const freshFlowers = filterApplicableFlowers(await fetchFlowersFromApi());
+      const hasChanges = !collectionsAreEqual(state.flowers, freshFlowers);
+
+      writeCachedFlowers(freshFlowers);
+      nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS;
+
+      if (hasChanges) {
+        applyFlowers(freshFlowers, { preserveView: true });
+      }
+    } catch (error) {
+      nextRefreshAt = Date.now() + REFRESH_RETRY_MS;
+      if (error && error.message === GUARD_BLOCKED_MESSAGE) {
+        waitForGuardRelease();
+      }
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
 }
 
 function waitForGuardRelease() {
@@ -910,17 +951,20 @@ async function loadData() {
 
   if (cached) {
     applyFlowers(cached.flowers);
-    refreshFlowersInBackground(serializeFlowers(cached.flowers));
+    refreshFlowersInBackground(true);
     return;
   }
 
   showLoading();
+  nextRefreshAt = Date.now() + MIN_REFRESH_GAP_MS;
 
   try {
-    const flowers = await fetchFlowersFromApi();
+    const flowers = filterApplicableFlowers(await fetchFlowersFromApi());
     writeCachedFlowers(flowers);
     applyFlowers(flowers);
+    nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS;
   } catch (error) {
+    nextRefreshAt = Date.now() + REFRESH_RETRY_MS;
     if (error && error.message === GUARD_BLOCKED_MESSAGE) {
       waitForGuardRelease();
       return;
@@ -929,11 +973,59 @@ async function loadData() {
   }
 }
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+function checkServiceWorkerUpdate(force = false) {
+  if (!serviceWorkerRegistration || !navigator.onLine) return;
+
+  const now = Date.now();
+  if (!force && now - lastServiceWorkerUpdateCheck < SW_UPDATE_CHECK_GAP_MS) return;
+
+  lastServiceWorkerUpdateCheck = now;
+  serviceWorkerRegistration.update().catch(() => {});
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  const hadController = Boolean(navigator.serviceWorker.controller);
+
+  navigator.serviceWorker
+    .register("./sw.js", { updateViaCache: "none" })
+    .then((registration) => {
+      serviceWorkerRegistration = registration;
+
+      const activateWaitingWorker = () => {
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+      };
+
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            worker.postMessage({ type: "SKIP_WAITING" });
+          }
+        });
+      });
+
+      activateWaitingWorker();
+      checkServiceWorkerUpdate(true);
+    })
+    .catch(() => {});
+
+  if (!hadController) return;
+
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
   });
 }
+
+if (document.readyState === "complete") registerServiceWorker();
+else window.addEventListener("load", registerServiceWorker, { once: true });
 
 flowerGrid.addEventListener("click", (event) => {
   const card = event.target.closest(".flower-card");
@@ -1029,6 +1121,63 @@ searchInput.addEventListener("input", (event) => {
 });
 
 closeCelebration.addEventListener("click", closeCelebrationNotice);
+
+function takeHiddenDuration() {
+  const hiddenFor = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = 0;
+  return hiddenFor;
+}
+
+function shouldReloadAfterHidden(hiddenFor) {
+  return navigator.onLine !== false && hiddenFor >= PAGE_RELOAD_AFTER_MS;
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    return;
+  }
+
+  if (shouldReloadAfterHidden(takeHiddenDuration())) {
+    window.location.reload();
+    return;
+  }
+
+  refreshFlowersInBackground();
+  checkServiceWorkerUpdate();
+});
+
+window.addEventListener("pagehide", () => {
+  hiddenAt = Date.now();
+});
+
+window.addEventListener("focus", () => {
+  refreshFlowersInBackground();
+  checkServiceWorkerUpdate();
+});
+
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted) return;
+
+  if (shouldReloadAfterHidden(takeHiddenDuration())) {
+    window.location.reload();
+    return;
+  }
+
+  refreshFlowersInBackground(true);
+  checkServiceWorkerUpdate(true);
+});
+
+window.addEventListener("online", () => {
+  refreshFlowersInBackground(true);
+  checkServiceWorkerUpdate(true);
+});
+
+window.setInterval(() => {
+  if (document.hidden) return;
+  refreshFlowersInBackground();
+  checkServiceWorkerUpdate();
+}, REFRESH_INTERVAL_MS);
 
 loadData();
 
