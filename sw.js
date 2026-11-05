@@ -1,5 +1,5 @@
 // Tăng CACHE_VERSION sau mỗi lần deploy giao diện mới.
-const CACHE_VERSION = "v11";
+const CACHE_VERSION = "v12";
 const STATIC_CACHE = `flower-static-${CACHE_VERSION}`;
 const API_CACHE = `flower-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = "flower-images-v1";
