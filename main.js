@@ -1,4 +1,4 @@
-const API_URL = "http://mykey.nguyennhoanhthai.workers.dev/";
+const API_URL = "https://mykey.nguyennhoanhthai.workers.dev";
 
 const RENDER_BATCH_SIZE = 20;
 const PAGE_SIZE = 48;
