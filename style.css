@@ -98,7 +98,7 @@ select:focus-visible {
   border-bottom: 1px solid var(--border-subtle);
   top: 0;
   z-index: 100;
-  position: fixed;
+  position: sticky;
 }
 
 .header-inner,
