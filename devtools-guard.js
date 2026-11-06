@@ -9,6 +9,38 @@
 
   window.__curiosityGuardActive = false;
 
+  function isDesktopDevice() {
+    var uaData = navigator.userAgentData;
+    if (uaData && typeof uaData.mobile === "boolean" && uaData.mobile) {
+      return false;
+    }
+
+    var ua = navigator.userAgent || "";
+
+    // Android (kể cả tablet), iPhone/iPad cũ, Opera Mini, tablet nói chung.
+    if (/Android|iPhone|iPod|iPad|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua)) {
+      return false;
+    }
+
+    // iPadOS 13+ giả làm Macintosh.
+    if (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1) {
+      return false;
+    }
+
+    // Điện thoại bật "Desktop site" vẫn có màn hình nhỏ.
+    if (
+      window.screen &&
+      Math.min(window.screen.width, window.screen.height) < 768
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // Chỉ chống tò mò trên laptop/PC; mobile để yên.
+  if (!isDesktopDevice()) return;
+
   var THRESHOLD_PX = 160;
   var ABSOLUTE_WIDTH_PX = 160;
   var ABSOLUTE_HEIGHT_PX = 200;
