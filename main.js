@@ -782,6 +782,35 @@ function flowerCollectionSignature(flowers) {
     .join("\n");
 }
 
+// Hoa vừa được thêm/cập nhật (khác dữ liệu lần trước) được đưa lên đầu,
+// các hoa không đổi giữ nguyên thứ tự cũ để danh sách không bị xáo trộn.
+function prioritizeChangedFlowers(previousFlowers, freshFlowers) {
+  if (previousFlowers.length === 0) return freshFlowers;
+
+  const previousSignatureByKey = new Map(
+    previousFlowers.map((flower) => [flowerKey(flower.name), flowerDataSignature(flower)])
+  );
+  const previousIndexByKey = new Map(
+    previousFlowers.map((flower, index) => [flowerKey(flower.name), index])
+  );
+  const changed = [];
+  const unchanged = [];
+
+  freshFlowers.forEach((flower) => {
+    const key = flowerKey(flower.name);
+    const isChanged = previousSignatureByKey.get(key) !== flowerDataSignature(flower);
+    (isChanged ? changed : unchanged).push(flower);
+  });
+
+  unchanged.sort(
+    (first, second) =>
+      previousIndexByKey.get(flowerKey(first.name)) -
+      previousIndexByKey.get(flowerKey(second.name))
+  );
+
+  return changed.concat(unchanged);
+}
+
 function filterApplicableFlowers(flowers) {
   return flowers.filter((flower) => (flower.owners || []).length > 0);
 }
@@ -905,13 +934,14 @@ function refreshFlowersInBackground(force = false) {
   refreshInFlight = (async () => {
     try {
       const freshFlowers = filterApplicableFlowers(await fetchFlowersFromApi());
-      const hasChanges = !collectionsAreEqual(state.flowers, freshFlowers);
+      const orderedFlowers = prioritizeChangedFlowers(state.flowers, freshFlowers);
+      const hasChanges = !collectionsAreEqual(state.flowers, orderedFlowers);
 
-      writeCachedFlowers(freshFlowers);
+      writeCachedFlowers(orderedFlowers);
       nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS;
 
       if (hasChanges) {
-        applyFlowers(freshFlowers, { preserveView: true });
+        applyFlowers(orderedFlowers, { preserveView: true });
       }
     } catch (error) {
       nextRefreshAt = Date.now() + REFRESH_RETRY_MS;
