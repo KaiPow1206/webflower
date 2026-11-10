@@ -260,6 +260,52 @@ function flowerKey(name) {
   return (name || "").trim().toLowerCase();
 }
 
+// Cloudinary gắn timestamp upload vào URL dạng /v<seconds>/. Dùng nó để biết
+// hoa nào mới được thêm/cập nhật ảnh, thay vì so sánh cache riêng từng máy.
+const UPLOAD_BATCH_GAP_SECONDS = 10 * 60;
+
+function flowerUploadVersion(flower) {
+  const match = /\/v(\d+)\//.exec((flower && flower.image) || "");
+  if (!match) return 0;
+
+  let seconds = Number(match[1]);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  if (seconds > 1e12) seconds = Math.floor(seconds / 1000);
+  return seconds;
+}
+
+function sortFlowersByRecency(flowers) {
+  if (flowers.length === 0) return flowers;
+
+  const entries = flowers.map((flower) => ({
+    flower,
+    version: flowerUploadVersion(flower),
+  }));
+
+  // Ảnh upload cách nhau không quá 10 phút được coi là cùng một đợt.
+  // Trong cùng một đợt xếp alphabet; đợt mới hơn luôn nằm trên đợt cũ hơn.
+  const versions = Array.from(new Set(entries.map((entry) => entry.version))).sort(
+    (first, second) => first - second
+  );
+  const batchByVersion = new Map();
+  let batch = 0;
+  versions.forEach((version, index) => {
+    if (index > 0 && version - versions[index - 1] > UPLOAD_BATCH_GAP_SECONDS) {
+      batch += 1;
+    }
+    batchByVersion.set(version, batch);
+  });
+
+  entries.sort((first, second) => {
+    const batchDiff =
+      batchByVersion.get(second.version) - batchByVersion.get(first.version);
+    if (batchDiff !== 0) return batchDiff;
+    return first.flower.name.localeCompare(second.flower.name, "vi");
+  });
+
+  return entries.map((entry) => entry.flower);
+}
+
 function normalizeFlowerEntry(flower) {
   const name = (flower.name || "").trim();
   if (!name) return null;
@@ -309,9 +355,7 @@ function buildFlowerCatalog(players) {
     });
   });
 
-  return Array.from(catalog.values()).sort((a, b) =>
-    a.name.localeCompare(b.name, "vi")
-  );
+  return sortFlowersByRecency(Array.from(catalog.values()));
 }
 
 function parseApiData(data) {
@@ -330,10 +374,7 @@ function parseApiData(data) {
     !("flowers" in first);
 
   if (isFlatFlowerList) {
-    return data
-      .map(normalizeFlowerEntry)
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+    return sortFlowersByRecency(data.map(normalizeFlowerEntry).filter(Boolean));
   }
 
   return buildFlowerCatalog(data);
@@ -778,37 +819,7 @@ function flowerDataSignature(flower) {
 function flowerCollectionSignature(flowers) {
   return flowers
     .map((flower) => `${flowerKey(flower.name)}\u0000${flowerDataSignature(flower)}`)
-    .sort()
     .join("\n");
-}
-
-// Hoa vừa được thêm/cập nhật (khác dữ liệu lần trước) được đưa lên đầu,
-// các hoa không đổi giữ nguyên thứ tự cũ để danh sách không bị xáo trộn.
-function prioritizeChangedFlowers(previousFlowers, freshFlowers) {
-  if (previousFlowers.length === 0) return freshFlowers;
-
-  const previousSignatureByKey = new Map(
-    previousFlowers.map((flower) => [flowerKey(flower.name), flowerDataSignature(flower)])
-  );
-  const previousIndexByKey = new Map(
-    previousFlowers.map((flower, index) => [flowerKey(flower.name), index])
-  );
-  const changed = [];
-  const unchanged = [];
-
-  freshFlowers.forEach((flower) => {
-    const key = flowerKey(flower.name);
-    const isChanged = previousSignatureByKey.get(key) !== flowerDataSignature(flower);
-    (isChanged ? changed : unchanged).push(flower);
-  });
-
-  unchanged.sort(
-    (first, second) =>
-      previousIndexByKey.get(flowerKey(first.name)) -
-      previousIndexByKey.get(flowerKey(second.name))
-  );
-
-  return changed.concat(unchanged);
 }
 
 function filterApplicableFlowers(flowers) {
@@ -830,7 +841,9 @@ function readCachedFlowers() {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.flowers) || parsed.flowers.length === 0) return null;
 
-    const flowers = parsed.flowers.map(normalizeFlowerEntry).filter(Boolean);
+    const flowers = sortFlowersByRecency(
+      parsed.flowers.map(normalizeFlowerEntry).filter(Boolean)
+    );
     if (flowers.length === 0) return null;
 
     return {
@@ -934,14 +947,13 @@ function refreshFlowersInBackground(force = false) {
   refreshInFlight = (async () => {
     try {
       const freshFlowers = filterApplicableFlowers(await fetchFlowersFromApi());
-      const orderedFlowers = prioritizeChangedFlowers(state.flowers, freshFlowers);
-      const hasChanges = !collectionsAreEqual(state.flowers, orderedFlowers);
+      const hasChanges = !collectionsAreEqual(state.flowers, freshFlowers);
 
-      writeCachedFlowers(orderedFlowers);
+      writeCachedFlowers(freshFlowers);
       nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS;
 
       if (hasChanges) {
-        applyFlowers(orderedFlowers, { preserveView: true });
+        applyFlowers(freshFlowers, { preserveView: true });
       }
     } catch (error) {
       nextRefreshAt = Date.now() + REFRESH_RETRY_MS;
